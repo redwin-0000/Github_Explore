@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Dimensions, StatusBar,Text } from 'react-native';
+import { Animated, Dimensions, StatusBar, StyleSheet, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
         backgroundColor:'#c1c1c1',
         borderRadius:200,
         width:width - 80,
-        height:height - 400,  
+        height:height - 400,
     },
     logo: {
         width: 200,
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginTop:-70,
-    }
+    },
 });
 
 export default InitialScreens;

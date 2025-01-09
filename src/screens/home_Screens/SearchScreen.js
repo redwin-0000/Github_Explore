@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   TextInput,
@@ -16,90 +16,137 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { fetchRepositories } from '../../services/githubAPI';
 import { useTheme } from '../../context/ThemeContext';
-import {useNetworkStatus} from '../../services/NetInfo';
+import { useNetworkStatus } from '../../services/NetInfo';
 import NoInternet from '../../components/NoInternet';
+
+let debounceTimer;
+
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [favorites, setFavorites] = useState([]);
   const navigation = useNavigation();
   const { isDarkMode, toggleTheme } = useTheme();
   const isConnected = useNetworkStatus();
 
-  // handl search function 
-  const handleSearch = async () => {
+  // Load favorites from AsyncStorage on component mount
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const storedFavorites = await AsyncStorage.getItem('favorites');
+        setFavorites(storedFavorites ? JSON.parse(storedFavorites) : []);
+      } catch (error) {
+        console.error('Error loading favorites', error);
+      }
+    };
+    loadFavorites();
+  }, []);
+
+  // Handle search with debouncing
+  const handleSearch = useCallback(async (searchQuery) => {
+    if (!searchQuery) {
+      setRepositories([]); // Clear results when query is empty
+      return;
+    }
+
     setLoading(true);
+
     try {
-      const data = await fetchRepositories(query);
-      setRepositories(data.items);
+      const data = await fetchRepositories(searchQuery);
+      setRepositories(data.items || []); // Update repositories
     } catch (error) {
-      console.error(error);
+      console.error('Error fetching repositories', error);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const onSearchInputChange = (text) => {
+    setQuery(text);
+
+    // Clear previous debounce timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    // Set a new debounce timer
+    debounceTimer = setTimeout(() => {
+      handleSearch(text); // Trigger the search after delay
+    }, 500); // Adjust the delay as needed (500ms is common)
   };
 
-  // Save repository to AsyncStorage
-  const handleSave = async (repo) => {
+  // Add or remove repository from favorites
+  const toggleFavorite = async (repo) => {
+    let updatedFavorites;
+    if (favorites.some((fav) => fav.id === repo.id)) {
+      // Remove from favorites
+      updatedFavorites = favorites.filter((fav) => fav.id !== repo.id);
+      Toast.show('Removed from Favorites!');
+    } else {
+      // Add to favorites
+      updatedFavorites = [...favorites, repo];
+      Toast.show('Added to Favorites!');
+    }
     try {
-      const existingData = await AsyncStorage.getItem('favorites');
-      const favorites = existingData ? JSON.parse(existingData) : [];
-      const updatedFavorites = [...favorites, repo];
       await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
-      Toast.show('Saved to Favorites!');
-
+      setFavorites(updatedFavorites);
     } catch (error) {
-      console.error('Error saving data', error);
+      console.error('Error updating favorites', error);
     }
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity onPress={() => navigation.navigate('Details', { repo: item, isDarkMode })}>
-    <View style={[styles.repoCard, isDarkMode && styles.repoCardDark]}>
-      <Image source={{ uri: item.owner.avatar_url }} style={styles.avatar} />
-      <View>
-       <Text style={[styles.repoName, isDarkMode && styles.repoNameDark]}>{item.name}</Text>
-        <Text style={[styles.repoDescription, isDarkMode && styles.repoDescriptionDark]}>
-          {item.description || 'No description'}
-        </Text>
-        <Text style={[styles.date, isDarkMode && styles.dateDark]}>
-          Created: {formatDistanceToNow(parseISO(item.created_at))} ago
-        </Text>
-       <Text style={[styles.date, isDarkMode && styles.dateDark]}>
-          Updated: {formatDistanceToNow(parseISO(item.updated_at))} ago
-        </Text>
-        <View style={{flexDirection:'row', justifyContent:'center', alignItems:'center'}}>
-          <Text>Add to Favorites</Text>
-          <TouchableOpacity
-          onPress={() => handleSave(item)}
-          style={[styles.saveButton, isDarkMode && styles.saveButtonDark]}
-        >
-          <Image
-            source={require('../../assests/favorite.png')}
-            style={{ width: 20, height: 20, left:100 }}
-          />
-        </TouchableOpacity>
+  const renderItem = ({ item }) => {
+    const isFavorite = favorites.some((fav) => fav.id === item.id);
+
+    return (
+      <TouchableOpacity onPress={() => navigation.navigate('Details', { repo: item, isDarkMode })}>
+        <View style={[styles.repoCard, isDarkMode && styles.repoCardDark]}>
+          <Image source={{ uri: item.owner.avatar_url }} style={styles.avatar} />
+          <View>
+            <Text style={[styles.repoName, isDarkMode && styles.repoNameDark]}>{item.name}</Text>
+            <Text style={[styles.repoDescription, isDarkMode && styles.repoDescriptionDark]}>
+              {item.description || 'No description'}
+            </Text>
+            <Text style={[styles.date, isDarkMode && styles.dateDark]}>
+              Created: {formatDistanceToNow(parseISO(item.created_at))} ago
+            </Text>
+            <Text style={[styles.date, isDarkMode && styles.dateDark]}>
+              Updated: {formatDistanceToNow(parseISO(item.updated_at))} ago
+            </Text>
+            <View style={styles.favourites}>
+              <Text>{isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</Text>
+              <TouchableOpacity onPress={() => toggleFavorite(item)}>
+                <Image
+                  source={
+                    isFavorite
+                      ? require('../../assests/star.png')
+                      : require('../../assests/starOne.png')
+                  }
+                  style={styles.favImg}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
-  </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, isDarkMode && styles.containerDark]}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <View style={styles.textInputDiv}>
         <TextInput
           style={[styles.input, isDarkMode && styles.inputDark]}
           placeholder="Search Repositories"
           placeholderTextColor={isDarkMode ? '#ccc' : '#666'}
           value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
+          onChangeText={onSearchInputChange} // Listen for input changes
         />
         <TouchableOpacity onPress={() => navigation.navigate('FavoritesScreen')}>
           <Image
             source={require('../../assests/favorite.png')}
-            style={{ width: 30, height: 30, top: -7, left: 5 }}
+            style={styles.favImg1}
           />
         </TouchableOpacity>
       </View>
@@ -118,10 +165,12 @@ export default function SearchScreen() {
           renderItem={renderItem}
         />
       )}
-      {!isConnected && (<NoInternet/> )}
+      {!isConnected && <NoInternet />}
     </View>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -160,7 +209,7 @@ const styles = StyleSheet.create({
     color: '#ccc',
   },
   repoCard: {
-    flexDirection: 'column',  // This aligns all content vertically
+    flexDirection: 'column',
     padding: 16,
     borderRadius: 8,
     backgroundColor: '#f9f9f9',
@@ -173,13 +222,13 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginBottom: 12, // Adjust the spacing between avatar and text
+    marginBottom: 12,
   },
   repoName: {
     fontWeight: 'bold',
     fontSize: 16,
     color: '#333',
-    textAlign: 'left', // Align the text to the left
+    textAlign: 'left',
   },
   repoNameDark: {
     color: '#fff',
@@ -187,7 +236,7 @@ const styles = StyleSheet.create({
   repoDescription: {
     fontSize: 14,
     color: '#666',
-    textAlign: 'left', // Align the text to the left
+    textAlign: 'left',
   },
   repoDescriptionDark: {
     color: '#aaa',
@@ -196,7 +245,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#555',
     marginTop: 4,
-    textAlign: 'left', // Align the text to the left
+    textAlign: 'left',
   },
   dateDark: {
     color: '#ccc',
@@ -209,5 +258,26 @@ const styles = StyleSheet.create({
   },
   saveButtonDark: {
     backgroundColor: '#444',
+  },
+  favourites: {
+    flexDirection:'row',
+    justifyContent:'center',
+    alignItems:'center',
+  },
+  favImg: {
+    width: 20,
+    height: 20,
+    left:100,
+  },
+  textInputDiv: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  favImg1: {
+    width: 30,
+    height: 30,
+    top: -7,
+    left: 5,
   },
 });

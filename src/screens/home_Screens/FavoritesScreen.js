@@ -1,12 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, {useState, useEffect} from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { formatDistanceToNow, parseISO } from 'date-fns';
+import {formatDistanceToNow, parseISO} from 'date-fns';
 import Toast from 'react-native-simple-toast';
 
-export default function FavoritesScreen({ route }) {
+export default function FavoritesScreen({route}) {
   const [favorites, setFavorites] = useState([]);
-    console.log(favorites)
   // get favorites data from AsyncStorage
   const loadFavorites = async () => {
     try {
@@ -23,29 +29,33 @@ export default function FavoritesScreen({ route }) {
   }, []);
 
   // Function to delete a favorite
-  const deleteFavorite = async (id) => {
+  const deleteFavorite = async id => {
     try {
-      const updatedFavorites = favorites.filter((item) => item.id !== id);
+      const updatedFavorites = favorites.filter(item => item.id !== id);
       await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
-      setFavorites(updatedFavorites); 
+      setFavorites(updatedFavorites);
       Toast.show('Delete from Favorites!');
     } catch (error) {
       console.error('Error deleting favorite', error);
     }
   };
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({item}) => (
     <View style={styles.card}>
-      <Image source={{ uri: item.owner.avatar_url }} style={styles.avatar} />
+      <Image source={{uri: item.owner.avatar_url}} style={styles.avatar} />
       <Text style={styles.title}>{item.name}</Text>
-      <Text style={styles.description}>{item.description || 'No description'}</Text>
-       <Text style={styles.date}>
-                Created: {formatDistanceToNow(parseISO(item.created_at))} ago
-              </Text>
-              <Text style={styles.date}>
-                Updated: {formatDistanceToNow(parseISO(item.updated_at))} ago
-              </Text>
-      <TouchableOpacity onPress={() => deleteFavorite(item.id)} style={styles.deleteButton}>
+      <Text style={styles.description}>
+        {item.description || 'No description'}
+      </Text>
+      <Text style={styles.date}>
+        Created: {formatDistanceToNow(parseISO(item.created_at))} ago
+      </Text>
+      <Text style={styles.date}>
+        Updated: {formatDistanceToNow(parseISO(item.updated_at))} ago
+      </Text>
+      <TouchableOpacity
+        onPress={() => deleteFavorite(item.id)}
+        style={styles.deleteButton}>
         <Text style={styles.deleteButtonText}>Delete</Text>
       </TouchableOpacity>
     </View>
@@ -56,7 +66,7 @@ export default function FavoritesScreen({ route }) {
       <Text style={styles.header}>Favorites</Text>
       <FlatList
         data={favorites}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={item => item.id.toString()}
         renderItem={renderItem}
       />
     </View>
@@ -82,7 +92,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderColor: '#ddd',
     borderWidth: 1,
-    position: 'relative', // To position delete button
+    position: 'relative',
   },
   title: {
     fontSize: 18,
